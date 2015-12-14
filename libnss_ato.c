@@ -59,8 +59,6 @@ const char *VALID_PROC_NAMES[] = {"sshd",
  * Extra lines are comments (not processed).
  */
 
-
-
 struct passwd *
 read_conf() 
 {
@@ -162,7 +160,6 @@ int should_find_user(void)
   // Process name didn't match any that we want.
   return FALSE;
 }
-
 
 enum nss_status
 _nss_ato_getpwnam_r( const char *name, 
