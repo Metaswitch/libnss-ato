@@ -27,6 +27,26 @@
 #include <string.h>
 #include <stdio.h>
 
+/*
+ * Match to the list of process names for which this module should return a
+ * result.
+ * They are processes which call nss_ato on login, and user-run OS command line
+ * programs.
+ */
+const char *VALID_PROC_NAMES[] = {"sshd",
+                                  "login",
+                                  "w"};
+
+/*
+ * Array length macro
+ * The size of the whole array divided by the size of the 1st element is the
+ * length of the array
+ */
+#define arraylen(array) ((sizeof(array))/(sizeof(array[0])))
+
+#define FALSE 0
+#define TRUE 1
+
 /* for security reasons */
 #define MIN_UID_NUMBER   500
 #define MIN_GID_NUMBER   500
@@ -38,6 +58,8 @@
  * dona:x:1001:1001:P D ,,,:/home/dona:/bin/bash
  * Extra lines are comments (not processed).
  */
+
+
 
 struct passwd *
 read_conf() 
@@ -89,6 +111,58 @@ get_static(char **buffer, size_t *buflen, int len)
 	return result;
 }
 
+/*
+ * should_find_user
+ * This determines whether this module should return 'not found' for the user,
+ * based on the name of the process it's being called in.
+ * The module should return the user only it is being called as part of a
+ * login attempt (over ssh or the console) or by some OS command-line
+ * programs.
+ *
+ * This function returns a boolean.
+ */
+int should_find_user(void)
+{
+  FILE *fd;
+  /*
+   * On Linux use the stat file to get the process name
+   */
+  char proc_file[] = "/proc/self/stat";
+  int pid;
+
+  /* Open the file */
+  if ((fd = fopen(proc_file, "r")) == NULL )
+  {
+    return FALSE;
+  }
+
+  /* Read the process ID */
+  fscanf(fd, "%d ", &pid);
+
+  /*
+   * Read the process name, which is at most 16 characters and enclosed in
+   * brackets.
+   */
+  char name[17];
+  fscanf(fd, "(%16[^)])", name);
+  fclose(fd);
+
+  /*
+   * Match to the list of permitted process names, defined at the top of the
+   * file.
+   */
+  int i;
+  for (i = 0; i < arraylen(VALID_PROC_NAMES); i++) {
+    if (strcmp(name, VALID_PROC_NAMES[i]) == 0) {
+      // DEBUG_LOG("libnss_ato: Process name matched '%s'", VALID_PROC_NAMES[i]);
+      return TRUE;
+    }
+  }
+
+  // Process name didn't match any that we want.
+  return FALSE;
+}
+
 
 enum nss_status
 _nss_ato_getpwnam_r( const char *name, 
@@ -98,6 +172,12 @@ _nss_ato_getpwnam_r( const char *name,
 	             int *errnop)
 {
 	struct passwd *conf;
+
+  if (!should_find_user())
+  {
+    // DEBUG_LOG("libnss_ato: We shouldn't return this user");
+    return NSS_STATUS_NOTFOUND;
+  }
   
 	if ((conf = read_conf()) == NULL) {
 		return NSS_STATUS_NOTFOUND;
@@ -129,6 +209,12 @@ _nss_ato_getspnam_r( const char *name,
                      size_t buflen,
                      int *errnop)
 {
+
+        if (!should_find_user())
+        {
+          // DEBUG_LOG("libnss_ato: We shouldn't return this user");
+          return NSS_STATUS_NOTFOUND;
+        }
 
         /* If out of memory */
         if ((s->sp_namp = get_static(&buffer, &buflen, strlen(name) + 1)) == NULL) {
