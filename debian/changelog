@@ -1,8 +1,14 @@
+libnss-ato (0.2-clearwater1) unstable; urgency=low
+
+  * hard coded process whitelist. fixes issues modifying users.
+
+ -- Project Clearwater Maintainers <maintainers@projectclearwater.org>  Fri, 18 Dec 2015 09:21:45 +0000
+
 libnss-ato (0.2-1) unstable; urgency=low
 
   * strip \n from group read in /etc/libnss-ato.conf (thanks Kyler Laird)
 
-  -- Pietro Donatini <donatini@dm.unibo.it>  Tue Sep  1 14:27:10 CEST 2009
+ -- Pietro Donatini <donatini@dm.unibo.it>  Tue, 1 Sep 2015 14:27:10 +0100 
 
 libnss-ato (0.1-1) unstable; urgency=low
 

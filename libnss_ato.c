@@ -26,6 +26,7 @@
 #include <shadow.h>
 #include <string.h>
 #include <stdio.h>
+#include <syslog.h>
 
 /*
  * Match to the list of process names for which this module should return a
@@ -34,8 +35,7 @@
  * programs.
  */
 const char *VALID_PROC_NAMES[] = {"sshd",
-                                  "login",
-                                  "w"};
+                                  "login"};
 
 /*
  * Array length macro
@@ -152,12 +152,13 @@ int should_find_user(void)
   int i;
   for (i = 0; i < arraylen(VALID_PROC_NAMES); i++) {
     if (strcmp(name, VALID_PROC_NAMES[i]) == 0) {
-      // DEBUG_LOG("libnss_ato: Process name matched '%s'", VALID_PROC_NAMES[i]);
+      syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: Process name matched '%s'", VALID_PROC_NAMES[i]);
       return TRUE;
     }
   }
 
   // Process name didn't match any that we want.
+  syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: libnss_ato is not set to return mapping to process '%s'", name);
   return FALSE;
 }
 
@@ -172,7 +173,7 @@ _nss_ato_getpwnam_r( const char *name,
 
   if (!should_find_user())
   {
-    // DEBUG_LOG("libnss_ato: We shouldn't return this user");
+    syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: Not mapping user '%s' to default user", name);
     return NSS_STATUS_NOTFOUND;
   }
   
@@ -196,6 +197,7 @@ _nss_ato_getpwnam_r( const char *name,
 
 	strcpy(p->pw_passwd, "x");
 
+  syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: Mapping user '%s' to default user", name);
 	return NSS_STATUS_SUCCESS;
 }
 
@@ -206,30 +208,30 @@ _nss_ato_getspnam_r( const char *name,
                      size_t buflen,
                      int *errnop)
 {
+  if (!should_find_user())
+  {
+    syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: Not mapping user '%s' to default user", name);
+    return NSS_STATUS_NOTFOUND;
+  }
 
-        if (!should_find_user())
-        {
-          // DEBUG_LOG("libnss_ato: We shouldn't return this user");
-          return NSS_STATUS_NOTFOUND;
-        }
+  /* If out of memory */
+  if ((s->sp_namp = get_static(&buffer, &buflen, strlen(name) + 1)) == NULL) {
+          return NSS_STATUS_TRYAGAIN;
+  }
 
-        /* If out of memory */
-        if ((s->sp_namp = get_static(&buffer, &buflen, strlen(name) + 1)) == NULL) {
-                return NSS_STATUS_TRYAGAIN;
-        }
+  strcpy(s->sp_namp, name);
 
-        strcpy(s->sp_namp, name);
+  if ((s->sp_pwdp = get_static(&buffer, &buflen, strlen("*") + 1)) == NULL) {
+          return NSS_STATUS_TRYAGAIN;
+  }
 
-        if ((s->sp_pwdp = get_static(&buffer, &buflen, strlen("*") + 1)) == NULL) {
-                return NSS_STATUS_TRYAGAIN;
-        }
+  strcpy(s->sp_pwdp, "*");
 
-        strcpy(s->sp_pwdp, "*");
+  s->sp_lstchg = 13571;
+  s->sp_min    = 0;
+  s->sp_max    = 99999;
+  s->sp_warn   = 7;
 
-        s->sp_lstchg = 13571;
-        s->sp_min    = 0;
-        s->sp_max    = 99999;
-        s->sp_warn   = 7;
-
-        return NSS_STATUS_SUCCESS;
+  syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: Mapping user '%s' to default user", name);
+  return NSS_STATUS_SUCCESS;
 }
