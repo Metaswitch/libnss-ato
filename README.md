@@ -51,7 +51,7 @@ Installation from Debian packages
 =========
 To build the Debian packages, run the following:
 ```console
-fakeroot debian/rules binary
+make deb
 ```
 This should create the correct `.deb` in the parent directory.
 

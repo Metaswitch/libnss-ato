@@ -44,7 +44,7 @@ clean:
 	rm -rf debian/libnss-ato
 	rm -f build-stamp
 
-build:
+deb:
 	@echo "${DEB_COMPONENT} (${DEB_VERSION}) unstable; urgency=low\n" >debian/changelog
 	@echo "  * build from revision $$(git rev-parse HEAD)\n" >>debian/changelog
 	fakeroot debian/rules binary
