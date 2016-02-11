@@ -3,6 +3,23 @@ libnss-ato (Name Service Switch module All-To-One)
 
 The libnss_ato module is a set of C library extensions which allows to map every nss request for unknown user to a single predefined user.
 
+Clearwater Code Management
+==========================
+
+The build infrastructure for libnss-ato is slightly different than for other Clearwater code
+repositories, in order to keep a separation between the upstream code and our changes.
+
+There are two main branches:
+
+- master, which is our version of the libnss-ato code
+- clearwater-upstream, which is master plus any Clearwater specific changes
+
+If you're making a Clearwater specific fix, make it directly in the clearwater-upstream
+branch.
+
+If you're making any other fix, make it in master and then merge that branch into
+clearwater-upstream.
+
 Description
 =========
 
