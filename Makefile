@@ -48,3 +48,6 @@ deb:
 	@echo "${DEB_COMPONENT} (${DEB_VERSION}) unstable; urgency=low\n" >debian/changelog
 	@echo "  * build from revision $$(git rev-parse HEAD)\n" >>debian/changelog
 	fakeroot debian/rules binary
+
+rpm: libnss_ato
+	rpmbuild -ba rpm/libnss-ato.spec --define "_topdir $(pwd)" --define "_buildid $(date +%y%m%d.%H%M%S)"
