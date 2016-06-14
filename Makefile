@@ -43,7 +43,7 @@ clean:
 	rm -f libnss_ato.so.2 libnss_ato_test
 	rm -rf debian/libnss-ato
 	rm -f build-stamp
-	rm -rf BUILD BUILDROOT RPMS SRPMS
+	rm -rf BUILD BUILDROOT RPMS SRPMS SOURCES SPECS
 
 deb:
 	@echo "${DEB_COMPONENT} (${DEB_VERSION}) unstable; urgency=low\n" >debian/changelog

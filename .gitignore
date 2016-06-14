@@ -2,3 +2,9 @@
 /libnss_ato_test
 /build-stamp
 debian/changelog
+/BUILD/
+/BUILDROOT/
+/RPMS/
+/SRPMS/
+/SOURCES/
+/SPECS/
