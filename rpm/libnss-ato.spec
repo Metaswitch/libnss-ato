@@ -30,4 +30,4 @@ NSS module to match all request of unknown user to a single user (All To One)
 # Specify the files to package. 
 /lib/libnss_ato.so.2
 /lib/libnss_ato-2.3.6.so
-/usr/share/man/man3/libnss-ato.3
+/usr/share/man/man3/libnss-ato.3.gz

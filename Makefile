@@ -43,6 +43,7 @@ clean:
 	rm -f libnss_ato.so.2 libnss_ato_test
 	rm -rf debian/libnss-ato
 	rm -f build-stamp
+	rm -rf BUILD BUILDROOT RPMS SRPMS
 
 deb:
 	@echo "${DEB_COMPONENT} (${DEB_VERSION}) unstable; urgency=low\n" >debian/changelog
@@ -50,4 +51,4 @@ deb:
 	fakeroot debian/rules binary
 
 rpm: libnss_ato
-	rpmbuild -ba rpm/libnss-ato.spec --define "_topdir $(pwd)" --define "_buildid $(date +%y%m%d.%H%M%S)"
+	rpmbuild -ba rpm/libnss-ato.spec --define "_topdir $$(pwd)" --define "_buildid $$(date +%y%m%d.%H%M%S)"
