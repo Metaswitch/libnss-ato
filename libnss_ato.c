@@ -35,7 +35,9 @@
  * programs.
  */
 const char *VALID_PROC_NAMES[] = {"sshd",
-                                  "login"};
+                                  "login",
+                                  "unix_chkpwd",
+                                  "id"};
 
 /*
  * Array length macro
