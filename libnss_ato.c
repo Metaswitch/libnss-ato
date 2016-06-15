@@ -36,7 +36,13 @@
  */
 const char *VALID_PROC_NAMES[] = {"sshd",
                                   "login",
+				  // SSHd on CentOS uses "unix_chkpwd", so ato
+				  // needs to respond to that
                                   "unix_chkpwd",
+				  // The "id" program isn't necessary, but it's
+				  // useful for testing that the library is set
+				  // up correctly, and the README examples
+				  // don't work without it.
                                   "id"};
 
 /*
