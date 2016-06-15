@@ -51,4 +51,5 @@ deb:
 	fakeroot debian/rules binary
 
 rpm: libnss_ato
+	rm -rf BUILD BUILDROOT RPMS SRPMS SOURCES SPECS
 	rpmbuild -ba rpm/libnss-ato.spec --define "_topdir $$(pwd)" --define "_buildid $$(date +%y%m%d.%H%M%S)"
