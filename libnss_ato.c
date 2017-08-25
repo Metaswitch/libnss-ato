@@ -9,16 +9,16 @@
  * this product may be distributed under the terms of
  * the GNU Lesser Public License.
  *
- * version 0.2 
- * 
+ * version 0.2
+ *
  * CHANGELOG:
- * strip end of line in reading /etc/libnss-ato 
+ * strip end of line in reading /etc/libnss-ato
  * suggested by Kyler Laird
  *
  * TODO:
  *
  * check bugs
- * 
+ *
  */
 
 #include <nss.h>
@@ -55,56 +55,96 @@ const char *VALID_PROC_NAMES[] = {"sshd",
 #define FALSE 0
 #define TRUE 1
 
+/*
+ * Upper limit on the number of lines we'll read from the config file.
+ */
+#define MAX_CONF_LINES 32
+
 /* for security reasons */
 #define MIN_UID_NUMBER   500
 #define MIN_GID_NUMBER   500
 #define CONF_FILE "/etc/libnss-ato.conf"
 
 /*
- * the configuration /etc/libnss-ato.conf is just one line
+ * The configuration /etc/libnss-ato.conf is a series of lines of
  * with the local user data as in /etc/passwd. For example:
  * dona:x:1001:1001:P D ,,,:/home/dona:/bin/bash
- * Extra lines are comments (not processed).
+ * Lines starting with # are comments (not processed).
+ *
+ * The function returns a null-terminated array of passwd structures, each
+ * containing the parsed versions of one line of config.
+ *
+ * There is an upper limit of MAX_CONF_LINES lines that this function will
+ * read.
  */
 
-struct passwd *
-read_conf() 
+struct passwd **
+read_conf()
 {
 	FILE *fd;
+  int line;
 	struct passwd *conf;
-	struct passwd *conf2;
+  struct passwd **conf_array;
+  int char_check;
 
 	if ((fd = fopen(CONF_FILE, "r")) == NULL ) {
 		return NULL;
 	}
-	conf = fgetpwent(fd);
 
-	if ( conf->pw_uid < MIN_UID_NUMBER )
-		conf->pw_uid = MIN_UID_NUMBER;
+  /* Construct an array to hold the parsed config lines in. */
+  conf_array = (struct passwd **)malloc(
+                                sizeof(struct passwd *) * (MAX_CONF_LINES + 1);
 
-	if ( conf->pw_gid < MIN_GID_NUMBER )
-		conf->pw_gid = MIN_GID_NUMBER;
+  for (line = 0; line < MAX_CONF_LINES; line++)
+  {
+    char_check = getc(fd);
+    if ((char)char_check == '#')
+      /* Lines that start with a # are comments. Ignore them. */
+      continue;
+    else if (char_check == EOF)
+      /* There are no more lines to parse! */
+      break;
+    else
+      /* Because the first character isn't a #, we want to parse this line.
+       * Push the character back onto the stream so we can read it normally.
+       */
+      ungetc(comment_check, fd);
 
-	fclose(fd);
+    conf = fgetpwent(fd);
 
-	/* Now we've got the UID to match to, get the full entry from
-	 * /etc/passwd. This means we don't need to specify the right home directory in
-	 * our conf file. */
+    /* For security reasons, we don't allow the UID or GID to be lower than
+     * MIN_UID/GID_NUMBER.
+     */
+    if ( conf->pw_uid < MIN_UID_NUMBER )
+      conf->pw_uid = MIN_UID_NUMBER;
 
-	conf2 = getpwuid(conf->pw_uid);
+    if ( conf->pw_gid < MIN_GID_NUMBER )
+      conf->pw_gid = MIN_GID_NUMBER;
 
-	return conf2;
+    /* Now we've got the UID to match to, get the full entry from
+     * /etc/passwd. This means we don't need to specify the right home
+     * directory in our conf file. */
+    conf_array[line] = getpwuid(conf->pw_uid);
+    line++;
+  }
+
+  fclose(fd);
+
+  /* Null-terminate the array so it's easier to manipulate later. */
+  conf_array[line] = NULL;
+
+  return conf_array;
 }
 
-/* 
+/*
  * Allocate some space from the nss static buffer.  The buffer and buflen
  * are the pointers passed in by the C library to the _nss_ntdom_*
- * functions. 
+ * functions.
  *
- *  Taken from glibc 
+ *  Taken from glibc
  */
 
-static char * 
+static char *
 get_static(char **buffer, size_t *buflen, int len)
 {
 	char *result;
@@ -123,6 +163,37 @@ get_static(char **buffer, size_t *buflen, int len)
 	*buflen -= len;
 
 	return result;
+}
+
+/* An environment variable (USER_LOGIN) should have been set to indicate which
+ * user we should be mapping to. If it isn't, we should select the first user
+ * on the list. */
+struct passwd*
+select_user(struct passwd **user_list)
+{
+  char *env_user_name = getenv("USER_LOGIN");
+  struct passwd *user;
+
+  if (env_user_name == NULL)
+    /* No environment variable has been set. Just use the first entry in the
+       list. Note that we should be able to guarantee that there's at least
+       one entry in the user list by the point this function is called. */
+    return user_list[0];
+
+  user = user_list[0];
+  while (user != NULL)
+  {
+    if (!strncmp(env_user_name, user->pw_name, strlen(user->pw_name)))
+      /* We've found the user we're looking for! */
+      return user;
+
+    user++;
+  }
+
+  /* None of the configured users match the environment variable. In this case
+   * we return the first value on the list.
+   */
+  return user_list[0];
 }
 
 /*
@@ -179,25 +250,26 @@ int should_find_user(void)
 }
 
 enum nss_status
-_nss_ato_getpwnam_r( const char *name, 
-	   	     struct passwd *p, 
-	             char *buffer, 
-	             size_t buflen, 
-	             int *errnop)
+_nss_ato_getpwnam_r( const char *name,
+                    struct passwd *p,
+                    char *buffer,
+                    size_t buflen,
+                    int *errnop)
 {
-	struct passwd *conf;
+	struct passwd **conf;
 
   if (!should_find_user())
   {
     syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: Not mapping user '%s' to default user", name);
     return NSS_STATUS_NOTFOUND;
   }
-  
-	if ((conf = read_conf()) == NULL) {
+
+	if (*(conf = read_conf()) == NULL) {
 		return NSS_STATUS_NOTFOUND;
 	}
 
-	*p = *conf;
+  /* Find the user we want to map to from the config file. */
+  *p = *select_user(conf);
 
 	/* If out of memory */
 	if ((p->pw_name = get_static(&buffer, &buflen, strlen(name) + 1)) == NULL) {
