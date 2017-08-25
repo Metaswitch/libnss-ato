@@ -25,6 +25,7 @@
 #include <pwd.h>
 #include <shadow.h>
 #include <string.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <syslog.h>
 
@@ -93,7 +94,7 @@ read_conf()
 
   /* Construct an array to hold the parsed config lines in. */
   conf_array = (struct passwd **)malloc(
-                                sizeof(struct passwd *) * (MAX_CONF_LINES + 1);
+                               sizeof(struct passwd *) * (MAX_CONF_LINES + 1));
 
   for (line = 0; line < MAX_CONF_LINES; line++)
   {
@@ -108,7 +109,7 @@ read_conf()
       /* Because the first character isn't a #, we want to parse this line.
        * Push the character back onto the stream so we can read it normally.
        */
-      ungetc(comment_check, fd);
+      ungetc(char_check, fd);
 
     conf = fgetpwent(fd);
 
