@@ -271,6 +271,10 @@ _nss_ato_getpwnam_r( const char *name,
 
   /* Find the user we want to map to from the config file. */
   *p = *select_user(conf);
+  syslog(LOG_AUTH|LOG_NOTICE,
+             "libnss_ato: Mapping user '%s' to locally provisioned user '%s'",
+             name,
+             p->pw_name);
 
 	/* If out of memory */
 	if ((p->pw_name = get_static(&buffer, &buflen, strlen(name) + 1)) == NULL) {
@@ -286,7 +290,6 @@ _nss_ato_getpwnam_r( const char *name,
 
 	strcpy(p->pw_passwd, "x");
 
-  syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: Mapping user '%s' to default user", name);
 	return NSS_STATUS_SUCCESS;
 }
 
