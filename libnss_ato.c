@@ -175,6 +175,8 @@ select_user(struct passwd **user_list)
   char *env_user_name = getenv("USER_LOGIN");
   struct passwd *user;
 
+  syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: USER_LOGIN: %s", env_user_name);
+
   if (env_user_name == NULL)
     /* No environment variable has been set. Just use the first entry in the
        list. Note that we should be able to guarantee that there's at least
@@ -185,15 +187,19 @@ select_user(struct passwd **user_list)
   while (user != NULL)
   {
     if (!strncmp(env_user_name, user->pw_name, strlen(user->pw_name)))
+    {
       /* We've found the user we're looking for! */
+      syslog(LOG_AUTH, "libnss_ato: Found user %s", user->pw_name);
       return user;
-
+    }
+    syslog(LOG_AUTH, "libnss_ato: User %s didn't match", user->pw_name);
     user++;
   }
 
   /* None of the configured users match the environment variable. In this case
    * we return the first value on the list.
    */
+  syslog(LOG_AUTH, "libnss_ato: Didn't find user");
   return user_list[0];
 }
 
