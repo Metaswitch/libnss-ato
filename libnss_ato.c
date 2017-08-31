@@ -301,18 +301,16 @@ _nss_ato_getpwnam_r( const char *name,
 
   local_user_name = select_user(conf);
   syslog(LOG_AUTH|LOG_NOTICE,
-             "libnss_ato: Mapping user '%s' to locally provisioned user '%s'",
-             name,
-             local_user_name);
-
-  /* We've got all we need from the configuration file at this point. */
-  free(conf);
+         "libnss_ato: Mapping user '%s' to locally provisioned user '%s'",
+         name,
+         local_user_name);
 
   /*
    * Now we know which user to map to, we build a passwd structure that matches
    * that of the locally provisioned user, with some small tweaks.
    */
   *p = *getpwnam(local_user_name);
+  syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: Found user %s", p->pw_name);
 
 	/* If out of memory */
 	if ((p->pw_name = get_static(&buffer, &buflen, strlen(name) + 1)) == NULL) {
@@ -327,6 +325,11 @@ _nss_ato_getpwnam_r( const char *name,
   }
 
 	strcpy(p->pw_passwd, "x");
+
+  /*
+   * Earlier we allocated some memory to store the parsed configuration file.
+   */
+  free(conf);
 
 	return NSS_STATUS_SUCCESS;
 }
