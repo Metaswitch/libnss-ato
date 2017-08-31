@@ -186,9 +186,10 @@ select_user(struct passwd **user_list)
   user = user_list[0];
   while (user != NULL)
   {
-    if (!strncmp(env_user_name, user->pw_name, strlen(user->pw_name)))
+    if (!strncmp(env_user_name, user->pw_name, strlen(env_user_name)))
     {
       /* We've found the user we're looking for! */
+      syslog(LOG_AUTH, "Got here");
       syslog(LOG_AUTH, "libnss_ato: Found user %s", user->pw_name);
       return user;
     }
