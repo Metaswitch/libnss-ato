@@ -84,6 +84,7 @@ read_conf()
 {
 	FILE *fd;
   int line;
+  int num_users = 0;
 	struct passwd *conf;
   struct passwd **conf_array;
   int char_check;
@@ -106,14 +107,16 @@ read_conf()
       /* There are no more lines to parse! */
       break;
     else
-      /* Because the first character isn't a #, we want to parse this line.
+      /*
+       * Because the first character isn't a #, we want to parse this line.
        * Push the character back onto the stream so we can read it normally.
        */
       ungetc(char_check, fd);
 
     conf = fgetpwent(fd);
 
-    /* For security reasons, we don't allow the UID or GID to be lower than
+    /*
+     * For security reasons, we don't allow the UID or GID to be lower than
      * MIN_UID/GID_NUMBER.
      */
     if ( conf->pw_uid < MIN_UID_NUMBER )
@@ -122,11 +125,13 @@ read_conf()
     if ( conf->pw_gid < MIN_GID_NUMBER )
       conf->pw_gid = MIN_GID_NUMBER;
 
-    /* Now we've got the UID to match to, get the full entry from
+    /*
+     * Now we've got the UID to match to, get the full entry from
      * /etc/passwd. This means we don't need to specify the right home
-     * directory in our conf file. */
-    conf_array[line] = getpwuid(conf->pw_uid);
-    line++;
+     * directory in our conf file.
+     */
+    conf_array[num_users] = getpwuid(conf->pw_uid);
+    num_users++;
   }
 
   fclose(fd);
@@ -166,9 +171,11 @@ get_static(char **buffer, size_t *buflen, int len)
 	return result;
 }
 
-/* An environment variable (USER_LOGIN) should have been set to indicate which
+/*
+ * An environment variable (USER_LOGIN) should have been set to indicate which
  * user we should be mapping to. If it isn't, we should select the first user
- * on the list. */
+ * on the list.
+ */
 struct passwd*
 select_user(struct passwd **user_list)
 {
@@ -178,9 +185,11 @@ select_user(struct passwd **user_list)
   syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: USER_LOGIN: %s", env_user_name);
 
   if (env_user_name == NULL)
-    /* No environment variable has been set. Just use the first entry in the
-       list. Note that we should be able to guarantee that there's at least
-       one entry in the user list by the point this function is called. */
+    /*
+     * No environment variable has been set. Just use the first entry in the
+     * list. Note that we should be able to guarantee that there's at least
+     * one entry in the user list by the point this function is called.
+     */
     return user_list[0];
 
   user = user_list[0];
@@ -197,7 +206,8 @@ select_user(struct passwd **user_list)
     user++;
   }
 
-  /* None of the configured users match the environment variable. In this case
+  /*
+   * None of the configured users match the environment variable. In this case
    * we return the first value on the list.
    */
   syslog(LOG_AUTH, "libnss_ato: Didn't find user");
@@ -282,6 +292,12 @@ _nss_ato_getpwnam_r( const char *name,
              "libnss_ato: Mapping user '%s' to locally provisioned user '%s'",
              name,
              p->pw_name);
+
+  /*
+   * At this point we're done with the user config, so we should free the
+   * associated memory.
+   */
+  free(conf);
 
 	/* If out of memory */
 	if ((p->pw_name = get_static(&buffer, &buflen, strlen(name) + 1)) == NULL) {
