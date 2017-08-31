@@ -57,6 +57,15 @@ const char *VALID_PROC_NAMES[] = {"sshd",
 #define TRUE 1
 
 /*
+ * It's useful to be able to pass around a mapping of user name to UID.
+ */
+struct user_id_map
+{
+  char *user_name;
+  uid_t uid;
+};
+
+/*
  * Upper limit on the number of lines we'll read from the config file.
  */
 #define MAX_CONF_LINES 32
@@ -107,21 +116,23 @@ get_static(char **buffer, size_t *buflen, int len)
  * read. The passed in buffer must contain enough space to store at least
  * this many usernames.
  */
-char **read_conf(char **buffer, size_t *buflen)
+struct user_id_map *read_conf(char **buffer, size_t *buflen)
 {
   FILE *fd;
   int line;
+  int char_check;
   int num_users = 0;
+
   struct passwd *parsed_conf;
   char *user_name;
-  int char_check;
 
 	if ((fd = fopen(CONF_FILE, "r")) == NULL ) {
 		return 0;
 	}
 
   /* Allocate some memory from the heap to store the user names. */
-  char **conf_array = (char **)malloc(MAX_CONF_LINES * sizeof(char *));
+  struct user_id_map *conf_array =
+     (struct user_id_map *)malloc(MAX_CONF_LINES * sizeof(struct user_id_map));
 
   for (line = 0; line < MAX_CONF_LINES; line++)
   {
@@ -151,9 +162,9 @@ char **read_conf(char **buffer, size_t *buflen)
     }
 
     /*
-     * Extract just the user names from the passwd structure. We store them off
-     * in the static buffer so we can access them later without them being
-     * overwritten by subsequent fgetpwent() calls.
+     * Extract the user name and UID from the passwd structure. We store the
+     * usernames in the static buffer so we can access them later without them
+     * being overwritten by subsequent fgetpwent() calls.
      */
     user_name = get_static(buffer, buflen, strlen(parsed_conf->pw_name) + 1);
     if (user_name == NULL) {
@@ -162,14 +173,21 @@ char **read_conf(char **buffer, size_t *buflen)
     }
 
     strcpy(user_name, parsed_conf->pw_name);
-    conf_array[num_users] = user_name;
+
+    /* For security, don't allow this for users below MIN_UID_NUMBER. */
+    if ( parsed_conf->pw_uid < MIN_UID_NUMBER )
+      parsed_conf->pw_uid = MIN_UID_NUMBER;
+
+    conf_array[num_users] = (struct user_id_map){user_name,
+                                                 parsed_conf->pw_uid};
     num_users++;
   }
 
-  /* Make sure the array is null-terminated - this will make it easier to
+  /*
+   * Make sure the array is null-terminated - this will make it easier to
    * manipulate later.
    */
-  conf_array[num_users] = NULL;
+  conf_array[num_users] = (struct user_id_map){NULL, 0};
 
   fclose(fd);
 
@@ -181,11 +199,11 @@ char **read_conf(char **buffer, size_t *buflen)
  * user we should be mapping to. If it isn't, we should select the first user
  * on the list.
  */
-char *
-select_user(char **user_list)
+uid_t select_uid(struct user_id_map *user_list)
 {
   char *env_user_name = getenv("USER_LOGIN");
-  char *user;
+  int user_idx;
+  struct user_id_map user;
 
   syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: USER_LOGIN: %s", env_user_name);
 
@@ -196,29 +214,31 @@ select_user(char **user_list)
      * one entry in the user list by the point this function is called.
      */
     syslog(LOG_AUTH,
-           "libnss_ato: No login provided, defaulting to %s",
-           user_list[0]);
-    return user_list[0];
+           "libnss_ato: No login provided, defaulting to user '%s'",
+           user_list[0].user_name);
+    return user_list[0].uid;
 
   user = user_list[0];
-  while (user != NULL)
+  for (user_idx=0; user_list[user_idx].user_name != NULL; user_idx++)
   {
-    if (!strcmp(env_user_name, user))
+    user = user_list[user_idx];
+    if (!strcmp(env_user_name, user.user_name))
     {
       /* We've found the user we're looking for! */
-      syslog(LOG_AUTH, "libnss_ato: Found user %s", user);
-      return user;
+      syslog(LOG_AUTH, "libnss_ato: Found user %s", user.user_name);
+      return user.uid;
     }
-    syslog(LOG_AUTH, "libnss_ato: User %s didn't match", user);
-    user++;
+    syslog(LOG_AUTH, "libnss_ato: User %s didn't match", user.user_name);
   }
 
   /*
    * None of the configured users match the environment variable. In this case
    * we return the first value on the list.
    */
-  syslog(LOG_AUTH, "libnss_ato: Didn't find user, defaulting to %s", user);
-  return user_list[0];
+  syslog(LOG_AUTH,
+         "libnss_ato: Didn't find user, defaulting to %s",
+         user.user_name);
+  return user_list[0].uid;
 }
 
 /*
@@ -275,15 +295,15 @@ int should_find_user(void)
 }
 
 enum nss_status
-_nss_ato_getpwnam_r( const char *name,
+_nss_ato_getpwnam_r(const char *name,
                     struct passwd *p,
                     char *buffer,
                     size_t buflen,
                     int *errnop)
 {
-  char **conf;
-  char *local_user_name;
-  struct passwd *sys_passwd;
+  struct user_id_map* conf;
+  uid_t local_uid;
+  struct passwd *user_passwd;
 
   if (!should_find_user())
   {
@@ -300,22 +320,26 @@ _nss_ato_getpwnam_r( const char *name,
     return NSS_STATUS_NOTFOUND;
   }
 
-  local_user_name = select_user(conf);
+  /*
+   * Find the passwd structure matching the chosen UID.
+   */
+  local_uid = select_uid(conf);
+  user_passwd = getpwuid(local_uid);
+
+  /*
+   * There isn't a user that matches the specified UID.
+   */
+  if (!user_passwd)
+  {
+    syslog(LOG_AUTH, "libnss_ato: UID %d didn't match", local_uid);
+    return NSS_STATUS_NOTFOUND;
+  }
+
   syslog(LOG_AUTH|LOG_NOTICE,
          "libnss_ato: Mapping user '%s' to locally provisioned user '%s'",
          name,
-         local_user_name);
-
-  /*
-   * Now we know which user to map to, we build a passwd structure that matches
-   * that of the locally provisioned user, with some small tweaks.
-   */
-  sys_passwd = getpwnam(local_user_name);
-  syslog(LOG_AUTH|LOG_NOTICE, "Pointer: %p", sys_passwd);
-  if (sys_passwd != NULL)
-  {
-    *p = *sys_passwd;
-  }
+         user_passwd->pw_name);
+  *p = *user_passwd;
 
 	/* If out of memory */
 	if ((p->pw_name = get_static(&buffer, &buflen, strlen(name) + 1)) == NULL) {
