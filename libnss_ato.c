@@ -72,30 +72,26 @@ const char *VALID_PROC_NAMES[] = {"sshd",
  * dona:x:1001:1001:P D ,,,:/home/dona:/bin/bash
  * Lines starting with # are comments (not processed).
  *
- * The function returns a null-terminated array of passwd structures, each
- * containing the parsed versions of one line of config.
+ * The function fills in the passed in conf_array with passwd structures, each
+ * containing the parsed versions of one line of config. The return value is
+ * the number of passwd structures filled in, or 0 if there has been an error.
  *
  * There is an upper limit of MAX_CONF_LINES lines that this function will
- * read.
+ * read. The passed in buffer must contain enough space to store at least
+ * this many passwd structures.
  */
-
-struct passwd **
-read_conf()
+int read_conf(struct passwd *conf_array)
 {
-	FILE *fd;
+  FILE *fd;
   int line;
   int num_users = 0;
-	struct passwd *conf;
-  struct passwd **conf_array;
+  struct passwd *parsed_conf;
+  struct passwd *real_conf;
   int char_check;
 
 	if ((fd = fopen(CONF_FILE, "r")) == NULL ) {
-		return NULL;
+		return 0;
 	}
-
-  /* Construct an array to hold the parsed config lines in. */
-  conf_array = (struct passwd **)malloc(
-                               sizeof(struct passwd *) * (MAX_CONF_LINES + 1));
 
   for (line = 0; line < MAX_CONF_LINES; line++)
   {
@@ -113,33 +109,48 @@ read_conf()
        */
       ungetc(char_check, fd);
 
-    conf = fgetpwent(fd);
+    /* Parse the config file. We can't assume that the contents of this file
+     * are completely accurate, but they should give us the information we need
+     * to extract accurate information from the real /etc/passwd file later.
+     */
+    parsed_conf = fgetpwent(fd);
 
     /*
      * For security reasons, we don't allow the UID or GID to be lower than
      * MIN_UID/GID_NUMBER.
      */
-    if ( conf->pw_uid < MIN_UID_NUMBER )
-      conf->pw_uid = MIN_UID_NUMBER;
+    if ( parsed_conf->pw_uid < MIN_UID_NUMBER )
+      parsed_conf->pw_uid = MIN_UID_NUMBER;
 
-    if ( conf->pw_gid < MIN_GID_NUMBER )
-      conf->pw_gid = MIN_GID_NUMBER;
+    if ( parsed_conf->pw_gid < MIN_GID_NUMBER )
+      parsed_conf->pw_gid = MIN_GID_NUMBER;
 
     /*
      * Now we've got the UID to match to, get the full entry from
      * /etc/passwd. This means we don't need to specify the right home
      * directory in our conf file.
      */
-    conf_array[num_users] = getpwuid(conf->pw_uid);
-    num_users++;
+    real_conf = getpwuid(parsed_conf->pw_uid);
+    if (real_conf)
+    {
+      memcpy(&conf_array[num_users],
+             real_conf,
+             sizeof(struct passwd));
+      num_users++;
+    }
+    else
+    {
+      /*
+       * There's a problem with the config file! The parsed UID doesn't match
+       * any users on the system.
+       */
+      return 0;
+    }
   }
 
   fclose(fd);
 
-  /* Null-terminate the array so it's easier to manipulate later. */
-  conf_array[line] = NULL;
-
-  return conf_array;
+  return num_users;
 }
 
 /*
@@ -176,11 +187,12 @@ get_static(char **buffer, size_t *buflen, int len)
  * user we should be mapping to. If it isn't, we should select the first user
  * on the list.
  */
-struct passwd*
-select_user(struct passwd **user_list)
+struct passwd *
+select_user(int num_users, struct passwd *user_list)
 {
   char *env_user_name = getenv("USER_LOGIN");
   struct passwd *user;
+  int user_index;
 
   syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: USER_LOGIN: %s", env_user_name);
 
@@ -190,20 +202,18 @@ select_user(struct passwd **user_list)
      * list. Note that we should be able to guarantee that there's at least
      * one entry in the user list by the point this function is called.
      */
-    return user_list[0];
+    return &user_list[0];
 
-  user = user_list[0];
-  while (user != NULL)
+  for (user_index = 0; user_index < num_users; user_index++)
   {
+    user = &user_list[user_index];
     if (!strncmp(env_user_name, user->pw_name, strlen(env_user_name)))
     {
       /* We've found the user we're looking for! */
-      syslog(LOG_AUTH, "Got here");
       syslog(LOG_AUTH, "libnss_ato: Found user %s", user->pw_name);
       return user;
     }
     syslog(LOG_AUTH, "libnss_ato: User %s didn't match", user->pw_name);
-    user++;
   }
 
   /*
@@ -211,7 +221,7 @@ select_user(struct passwd **user_list)
    * we return the first value on the list.
    */
   syslog(LOG_AUTH, "libnss_ato: Didn't find user");
-  return user_list[0];
+  return &user_list[0];
 }
 
 /*
@@ -274,7 +284,7 @@ _nss_ato_getpwnam_r( const char *name,
                     size_t buflen,
                     int *errnop)
 {
-	struct passwd **conf;
+	struct passwd *conf_array;
 
   if (!should_find_user())
   {
@@ -282,22 +292,27 @@ _nss_ato_getpwnam_r( const char *name,
     return NSS_STATUS_NOTFOUND;
   }
 
-	if (*(conf = read_conf()) == NULL) {
-		return NSS_STATUS_NOTFOUND;
-	}
+  /* Dynamically assign some memory to use for storing config from file. */
+  conf_array = (struct passwd *)malloc(sizeof(struct passwd) * MAX_CONF_LINES);
+  int num_users = read_conf(conf_array);
+
+  /* We can't go any further if we didn't manage to parse any users out of the
+   * config file.
+   */
+  if (!num_users) {
+    free(conf_array);
+    return NSS_STATUS_NOTFOUND;
+  }
 
   /* Find the user we want to map to from the config file. */
-  *p = *select_user(conf);
+  *p = *select_user(num_users, conf_array);
   syslog(LOG_AUTH|LOG_NOTICE,
              "libnss_ato: Mapping user '%s' to locally provisioned user '%s'",
              name,
              p->pw_name);
 
-  /*
-   * At this point we're done with the user config, so we should free the
-   * associated memory.
-   */
-  free(conf);
+  /* We've got all we need from the configuration file at this point. */
+  free(conf_array);
 
 	/* If out of memory */
 	if ((p->pw_name = get_static(&buffer, &buflen, strlen(name) + 1)) == NULL) {
