@@ -137,18 +137,19 @@ struct user_id_map *read_conf(char **buffer, size_t *buflen)
   for (line = 0; line < MAX_CONF_LINES; line++)
   {
     char_check = getc(fd);
-    if ((char)char_check == '#')
+    if ((char)char_check == '#') {
       /* Lines that start with a # are comments. Ignore them. */
       continue;
-    else if (char_check == EOF)
+    } else if (char_check == EOF) {
       /* There are no more lines to parse! */
       break;
-    else
+    } else {
       /*
        * Because the first character isn't a #, we want to parse this line.
        * Push the character back onto the stream so we can read it normally.
        */
       ungetc(char_check, fd);
+    }
 
     /*
      * Parse the config file. We can't assume that the contents of this file
@@ -208,6 +209,7 @@ uid_t select_uid(struct user_id_map *user_list)
   syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: USER_LOGIN: %s", env_user_name);
 
   if (env_user_name == NULL)
+  {
     /*
      * No environment variable has been set. Just use the first entry in the
      * list. Note that we should be able to guarantee that there's at least
@@ -217,6 +219,7 @@ uid_t select_uid(struct user_id_map *user_list)
            "libnss_ato: No login provided, defaulting to user '%s'",
            user_list[0].user_name);
     return user_list[0].uid;
+  }
 
   user = user_list[0];
   for (user_idx=0; user_list[user_idx].user_name != NULL; user_idx++)
@@ -320,9 +323,7 @@ _nss_ato_getpwnam_r(const char *name,
     return NSS_STATUS_NOTFOUND;
   }
 
-  /*
-   * Find the passwd structure matching the chosen UID.
-   */
+  /* Find the passwd structure matching the chosen UID. */
   local_uid = select_uid(conf);
   user_passwd = getpwuid(local_uid);
 
