@@ -155,7 +155,7 @@ char **read_conf(char **buffer, size_t *buflen)
      * in the static buffer so we can access them later without them being
      * overwritten by subsequent fgetpwent() calls.
      */
-    user_name = get_static(buffer, buflen, strlen(parsed_conf->pw_name));
+    user_name = get_static(buffer, buflen, strlen(parsed_conf->pw_name) + 1);
     if (user_name == NULL) {
       free(conf_array);
       return NULL;
