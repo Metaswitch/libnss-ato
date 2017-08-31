@@ -283,6 +283,7 @@ _nss_ato_getpwnam_r( const char *name,
 {
   char **conf;
   char *local_user_name;
+  struct passwd *sys_passwd;
 
   if (!should_find_user())
   {
@@ -309,8 +310,12 @@ _nss_ato_getpwnam_r( const char *name,
    * Now we know which user to map to, we build a passwd structure that matches
    * that of the locally provisioned user, with some small tweaks.
    */
-  *p = *getpwnam(local_user_name);
-  syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: Found user %s", p->pw_name);
+  sys_passwd = getpwnam(local_user_name);
+  syslog(LOG_AUTH|LOG_NOTICE, "Pointer: %p", sys_passwd);
+  if (sys_passwd != NULL)
+  {
+    *p = *sys_passwd;
+  }
 
 	/* If out of memory */
 	if ((p->pw_name = get_static(&buffer, &buflen, strlen(name) + 1)) == NULL) {
