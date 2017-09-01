@@ -213,14 +213,12 @@ uid_t select_uid(struct user_id_map *user_list)
   if (env_user_name == NULL)
   {
     /*
-     * No environment variable has been set. Just use the first entry in the
-     * list. Note that we should be able to guarantee that there's at least
-     * one entry in the user list by the point this function is called.
+     * No environment variable has been set. This indicates that no RADIUS
+     * authentication has taken place yet, so we don't know which user to map
+     * to. Return 0 to indicate we can't decide.
      */
-    syslog(LOG_AUTH,
-           "libnss_ato: No login provided, defaulting to user '%s'",
-           user_list[0].user_name);
-    return user_list[0].uid;
+    syslog(LOG_AUTH, "libnss_ato: Unknown which user to map to");
+    return 0;
   }
 
   user = user_list[0];
@@ -327,6 +325,12 @@ _nss_ato_getpwnam_r(const char *name,
 
   /* Find the passwd structure matching the chosen UID. */
   local_uid = select_uid(conf);
+  if (!local_uid)
+  {
+    syslog(LOG_AUTH|LOG_NOTICE, "libnss-ato: No user to map to");
+    return NSS_STATUS_TRYAGAIN;
+  }
+
   user_passwd = getpwuid(local_uid);
 
   /*
