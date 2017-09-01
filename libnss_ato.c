@@ -139,6 +139,8 @@ struct user_id_map *read_conf(char **buffer, size_t *buflen)
     char_check = getc(fd);
     if ((char)char_check == '#') {
       /* Lines that start with a # are comments. Ignore them. */
+      char junk[1000];
+      fgets(junk, sizeof(junk), fd);
       continue;
     } else if (char_check == EOF) {
       /* There are no more lines to parse! */
