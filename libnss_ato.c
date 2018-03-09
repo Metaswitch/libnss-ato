@@ -1,3 +1,8 @@
+/**
+ * Some of the content of this file has been edited by Metaswitch, in the time
+ * period from December 2015 to the present time.
+ * /
+
 /*
  * libnss_ato.c
  *
@@ -9,16 +14,16 @@
  * this product may be distributed under the terms of
  * the GNU Lesser Public License.
  *
- * version 0.2 
- * 
+ * version 0.2
+ *
  * CHANGELOG:
- * strip end of line in reading /etc/libnss-ato 
+ * strip end of line in reading /etc/libnss-ato
  * suggested by Kyler Laird
  *
  * TODO:
  *
  * check bugs
- * 
+ *
  */
 
 #include <nss.h>
@@ -68,7 +73,7 @@ const char *VALID_PROC_NAMES[] = {"sshd",
  */
 
 struct passwd *
-read_conf() 
+read_conf()
 {
 	FILE *fd;
 	struct passwd *conf;
@@ -96,15 +101,15 @@ read_conf()
 	return conf2;
 }
 
-/* 
+/*
  * Allocate some space from the nss static buffer.  The buffer and buflen
  * are the pointers passed in by the C library to the _nss_ntdom_*
- * functions. 
+ * functions.
  *
- *  Taken from glibc 
+ *  Taken from glibc
  */
 
-static char * 
+static char *
 get_static(char **buffer, size_t *buflen, int len)
 {
 	char *result;
@@ -179,10 +184,10 @@ int should_find_user(void)
 }
 
 enum nss_status
-_nss_ato_getpwnam_r( const char *name, 
-	   	     struct passwd *p, 
-	             char *buffer, 
-	             size_t buflen, 
+_nss_ato_getpwnam_r( const char *name,
+	   	     struct passwd *p,
+	             char *buffer,
+	             size_t buflen,
 	             int *errnop)
 {
 	struct passwd *conf;
@@ -192,7 +197,7 @@ _nss_ato_getpwnam_r( const char *name,
     syslog(LOG_AUTH|LOG_NOTICE, "libnss_ato: Not mapping user '%s' to default user", name);
     return NSS_STATUS_NOTFOUND;
   }
-  
+
 	if ((conf = read_conf()) == NULL) {
 		return NSS_STATUS_NOTFOUND;
 	}

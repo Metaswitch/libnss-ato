@@ -1,3 +1,6 @@
+# Some of the content of this file has been edited by Metaswitch, in the time
+# period from December 2015 to the present time.
+
 Name:           libnss-ato
 Version:        0.2_clearwater_%{_buildid}
 Release:        1
