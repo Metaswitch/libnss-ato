@@ -1,7 +1,7 @@
-/**
+/*
  * Some of the content of this file has been edited by Metaswitch, in the time
  * period from December 2015 to the present time.
- * /
+ */
 
 /*
  * libnss_ato.c
